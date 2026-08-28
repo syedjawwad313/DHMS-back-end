@@ -22,6 +22,12 @@ CREATE TABLE IF NOT EXISTS domains (
     purchase_date DATE NOT NULL,
     expiry_date DATE NOT NULL,
     status TEXT CHECK (status IN ('Active', 'Expiring Soon', 'Expired')) DEFAULT 'Active',
+    domain_cost NUMERIC(10,2) DEFAULT 0.00,
+    has_hosting BOOLEAN DEFAULT FALSE,
+    hosting_registrar TEXT,
+    hosting_purchase_date DATE,
+    hosting_expiry_date DATE,
+    hosting_cost NUMERIC(10,2) DEFAULT 0.00,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

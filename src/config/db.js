@@ -155,8 +155,22 @@ async function initializePostgres(clientPool) {
         purchase_date DATE NOT NULL,
         expiry_date DATE NOT NULL,
         status VARCHAR(50) DEFAULT 'Active',
+        domain_cost NUMERIC(10,2) DEFAULT 0.00,
+        has_hosting BOOLEAN DEFAULT FALSE,
+        hosting_registrar TEXT,
+        hosting_purchase_date DATE,
+        hosting_expiry_date DATE,
+        hosting_cost NUMERIC(10,2) DEFAULT 0.00,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      -- Ensure columns exist in live database (migrations)
+      ALTER TABLE domains ADD COLUMN IF NOT EXISTS domain_cost NUMERIC(10,2) DEFAULT 0.00;
+      ALTER TABLE domains ADD COLUMN IF NOT EXISTS has_hosting BOOLEAN DEFAULT FALSE;
+      ALTER TABLE domains ADD COLUMN IF NOT EXISTS hosting_registrar TEXT;
+      ALTER TABLE domains ADD COLUMN IF NOT EXISTS hosting_purchase_date DATE;
+      ALTER TABLE domains ADD COLUMN IF NOT EXISTS hosting_expiry_date DATE;
+      ALTER TABLE domains ADD COLUMN IF NOT EXISTS hosting_cost NUMERIC(10,2) DEFAULT 0.00;
 
       CREATE TABLE IF NOT EXISTS user_subscriptions (
         id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -497,6 +511,12 @@ export const query = async (text, params = []) => {
       purchase_date: params[3],
       expiry_date: params[4],
       status: params[5] || 'Active',
+      domain_cost: params[6] !== undefined ? Number(params[6]) : 0.00,
+      has_hosting: params[7] !== undefined ? Boolean(params[7]) : false,
+      hosting_registrar: params[8] || null,
+      hosting_purchase_date: params[9] || null,
+      hosting_expiry_date: params[10] || null,
+      hosting_cost: params[11] !== undefined ? Number(params[11]) : 0.00,
       created_at: new Date(),
     };
     inMemoryStore.domains.push(newDomain);
@@ -511,8 +531,14 @@ export const query = async (text, params = []) => {
       if (params[1]) domain.registrar = params[1];
       if (params[2]) domain.purchase_date = params[2];
       if (params[3]) domain.expiry_date = params[3];
-      if (params[4] && params.length >= 7) domain.user_id = params[4];
+      if (params[4]) domain.user_id = params[4];
       if (params[5]) domain.status = params[5];
+      if (params[6] !== undefined) domain.domain_cost = Number(params[6]);
+      if (params[7] !== undefined) domain.has_hosting = Boolean(params[7]);
+      if (params[8] !== undefined) domain.hosting_registrar = params[8];
+      if (params[9] !== undefined) domain.hosting_purchase_date = params[9];
+      if (params[10] !== undefined) domain.hosting_expiry_date = params[10];
+      if (params[11] !== undefined) domain.hosting_cost = Number(params[11]);
     }
     return { rows: domain ? [domain] : [], rowCount: domain ? 1 : 0 };
   }

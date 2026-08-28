@@ -327,7 +327,19 @@ export const getAdminDomains = async (req, res, next) => {
  */
 export const createAdminDomain = async (req, res, next) => {
   try {
-    const { user_id, domain_name, registrar, purchase_date, expiry_date } = req.body;
+    const {
+      user_id,
+      domain_name,
+      registrar,
+      purchase_date,
+      expiry_date,
+      domain_cost = 0.00,
+      has_hosting = false,
+      hosting_registrar = null,
+      hosting_purchase_date = null,
+      hosting_expiry_date = null,
+      hosting_cost = 0.00,
+    } = req.body;
 
     if (!user_id || !domain_name || !registrar || !purchase_date || !expiry_date) {
       return res.status(400).json({
@@ -336,14 +348,47 @@ export const createAdminDomain = async (req, res, next) => {
       });
     }
 
+    const isHosting = Boolean(has_hosting);
+    const finalHostingRegistrar = isHosting && hosting_registrar ? hosting_registrar.trim() : null;
+    const finalHostingPurchaseDate = isHosting && hosting_purchase_date ? hosting_purchase_date : null;
+    const finalHostingExpiryDate = isHosting && hosting_expiry_date ? hosting_expiry_date : null;
+    const finalHostingCost = isHosting && hosting_cost ? parseFloat(hosting_cost) : 0.00;
+    const finalDomainCost = domain_cost ? parseFloat(domain_cost) : 0.00;
+
     const { calculateDomainStatus, formatDomainWithStatus } = await import('../utils/statusHelper.js');
     const dynamicStatus = calculateDomainStatus(expiry_date);
 
     const insertResult = await query(
-      `INSERT INTO domains (user_id, domain_name, registrar, purchase_date, expiry_date, status)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [user_id, domain_name.trim().toLowerCase(), registrar.trim(), purchase_date, expiry_date, dynamicStatus]
+      `INSERT INTO domains (
+        user_id,
+        domain_name,
+        registrar,
+        purchase_date,
+        expiry_date,
+        status,
+        domain_cost,
+        has_hosting,
+        hosting_registrar,
+        hosting_purchase_date,
+        hosting_expiry_date,
+        hosting_cost
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *`,
+      [
+        user_id,
+        domain_name.trim().toLowerCase(),
+        registrar.trim(),
+        purchase_date,
+        expiry_date,
+        dynamicStatus,
+        finalDomainCost,
+        isHosting,
+        finalHostingRegistrar,
+        finalHostingPurchaseDate,
+        finalHostingExpiryDate,
+        finalHostingCost,
+      ]
     );
 
     const newDomain = formatDomainWithStatus(insertResult.rows[0]);
@@ -365,7 +410,19 @@ export const createAdminDomain = async (req, res, next) => {
 export const updateAdminDomain = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { domain_name, registrar, purchase_date, expiry_date, user_id } = req.body;
+    const {
+      domain_name,
+      registrar,
+      purchase_date,
+      expiry_date,
+      user_id,
+      domain_cost,
+      has_hosting,
+      hosting_registrar,
+      hosting_purchase_date,
+      hosting_expiry_date,
+      hosting_cost,
+    } = req.body;
 
     const check = await query('SELECT * FROM domains WHERE id = $1', [id]);
     if (check.rows.length === 0) {
@@ -378,6 +435,13 @@ export const updateAdminDomain = async (req, res, next) => {
     const { calculateDomainStatus, formatDomainWithStatus } = await import('../utils/statusHelper.js');
     const dynamicStatus = expiry_date ? calculateDomainStatus(expiry_date) : check.rows[0].status;
 
+    const isHosting = has_hosting !== undefined ? Boolean(has_hosting) : check.rows[0].has_hosting;
+    const finalHostingRegistrar = isHosting ? (hosting_registrar ? hosting_registrar.trim() : check.rows[0].hosting_registrar) : null;
+    const finalHostingPurchaseDate = isHosting ? (hosting_purchase_date || check.rows[0].hosting_purchase_date) : null;
+    const finalHostingExpiryDate = isHosting ? (hosting_expiry_date || check.rows[0].hosting_expiry_date) : null;
+    const finalHostingCost = isHosting ? (hosting_cost !== undefined ? parseFloat(hosting_cost) : check.rows[0].hosting_cost) : 0.00;
+    const finalDomainCost = domain_cost !== undefined ? parseFloat(domain_cost) : check.rows[0].domain_cost || 0.00;
+
     const result = await query(
       `UPDATE domains
        SET domain_name = COALESCE($1, domain_name),
@@ -385,8 +449,14 @@ export const updateAdminDomain = async (req, res, next) => {
            purchase_date = COALESCE($3, purchase_date),
            expiry_date = COALESCE($4, expiry_date),
            user_id = COALESCE($5, user_id),
-           status = $6
-       WHERE id = $7
+           status = $6,
+           domain_cost = $7,
+           has_hosting = $8,
+           hosting_registrar = $9,
+           hosting_purchase_date = $10,
+           hosting_expiry_date = $11,
+           hosting_cost = $12
+       WHERE id = $13
        RETURNING *`,
       [
         domain_name ? domain_name.trim().toLowerCase() : null,
@@ -395,6 +465,12 @@ export const updateAdminDomain = async (req, res, next) => {
         expiry_date || null,
         user_id || null,
         dynamicStatus,
+        finalDomainCost,
+        isHosting,
+        finalHostingRegistrar,
+        finalHostingPurchaseDate,
+        finalHostingExpiryDate,
+        finalHostingCost,
         id,
       ]
     );
