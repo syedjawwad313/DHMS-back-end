@@ -512,3 +512,41 @@ export const deleteAdminDomain = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Admin Delete User
+ * DELETE /api/admin/users/:id
+ */
+export const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Self-deletion protection
+    if (req.user && req.user.id === id) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot delete your own admin account.',
+      });
+    }
+
+    const check = await query('SELECT id, email, role FROM users WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User account not found.',
+      });
+    }
+
+    const targetUser = check.rows[0];
+
+    // Delete user from database (Foreign keys automatically cascade to domains and subscriptions)
+    await query('DELETE FROM users WHERE id = $1', [id]);
+
+    return res.status(200).json({
+      success: true,
+      message: `User account '${targetUser.email}' and all associated domains/records removed successfully.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

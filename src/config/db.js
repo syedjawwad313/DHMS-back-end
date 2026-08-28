@@ -326,6 +326,23 @@ export const query = async (text, params = []) => {
     return { rows: [newUser], rowCount: 1 };
   }
 
+  if (cleanSql.includes('DELETE FROM users WHERE id = $1')) {
+    const userId = params[0];
+    const idx = inMemoryStore.users.findIndex((u) => u.id === userId);
+    let deleted = null;
+    if (idx !== -1) {
+      deleted = inMemoryStore.users[idx];
+      inMemoryStore.users.splice(idx, 1);
+      // Cascade delete domains and subscriptions
+      const userDomainIds = inMemoryStore.domains.filter((d) => d.user_id === userId).map((d) => d.id);
+      inMemoryStore.domains = inMemoryStore.domains.filter((d) => d.user_id !== userId);
+      inMemoryStore.user_subscriptions = inMemoryStore.user_subscriptions.filter(
+        (s) => s.user_id !== userId && !userDomainIds.includes(s.domain_id)
+      );
+    }
+    return { rows: deleted ? [deleted] : [], rowCount: deleted ? 1 : 0 };
+  }
+
   // 2. HOSTING PLANS
   if (cleanSql.includes('INSERT INTO hosting_plans')) {
     const newPlan = {

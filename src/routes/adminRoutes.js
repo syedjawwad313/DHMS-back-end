@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getMetrics,
   getUsers,
+  deleteUser,
   getMessages,
   updateMessageStatus,
   createPlan,
@@ -26,6 +27,7 @@ router.get('/metrics', getMetrics);
 
 // Registered users directory
 router.get('/users', getUsers);
+router.delete('/users/:id', deleteUser);
 
 // Contact messages inbox & status toggle
 router.get('/messages', getMessages);
