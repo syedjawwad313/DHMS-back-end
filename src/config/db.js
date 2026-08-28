@@ -134,8 +134,12 @@ async function initializePostgres(clientPool) {
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(50) DEFAULT 'user',
+        is_suspended BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      -- Ensure users table columns exist
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_suspended BOOLEAN DEFAULT FALSE;
 
       CREATE TABLE IF NOT EXISTS hosting_plans (
         id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -320,10 +324,20 @@ export const query = async (text, params = []) => {
       email: params[0],
       password_hash: params[1],
       role: params[2] || 'user',
+      is_suspended: false,
       created_at: new Date(),
     };
     inMemoryStore.users.push(newUser);
     return { rows: [newUser], rowCount: 1 };
+  }
+
+  if (cleanSql.includes('UPDATE users SET is_suspended = NOT is_suspended WHERE id = $1')) {
+    const userId = params[0];
+    const user = inMemoryStore.users.find((u) => u.id === userId);
+    if (user) {
+      user.is_suspended = !user.is_suspended;
+    }
+    return { rows: user ? [user] : [], rowCount: user ? 1 : 0 };
   }
 
   if (cleanSql.includes('DELETE FROM users WHERE id = $1')) {

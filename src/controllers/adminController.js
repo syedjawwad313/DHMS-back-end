@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import { query } from '../config/db.js';
 
 /**
@@ -51,13 +52,14 @@ export const getUsers = async (req, res, next) => {
       SELECT u.id,
              u.email,
              u.role,
+             u.is_suspended,
              u.created_at,
              COUNT(DISTINCT d.id)::int AS domain_count,
              COUNT(DISTINCT s.id)::int AS subscription_count
       FROM users u
       LEFT JOIN domains d ON u.id = d.user_id
       LEFT JOIN user_subscriptions s ON u.id = s.user_id
-      GROUP BY u.id, u.email, u.role, u.created_at
+      GROUP BY u.id, u.email, u.role, u.is_suspended, u.created_at
       ORDER BY u.created_at DESC
     `;
 
@@ -545,6 +547,111 @@ export const deleteUser = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: `User account '${targetUser.email}' and all associated domains/records removed successfully.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Admin Provision New User
+ * POST /api/admin/users
+ */
+export const createUser = async (req, res, next) => {
+  try {
+    const { email, password, role = 'user' } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required.',
+      });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address.',
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Temporary password must be at least 6 characters long.',
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const sanitizedRole = role === 'admin' ? 'admin' : 'user';
+
+    const check = await query('SELECT id FROM users WHERE LOWER(email) = $1', [normalizedEmail]);
+    if (check.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'A user with this email already exists.',
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const insertResult = await query(
+      `INSERT INTO users (email, password_hash, role, is_suspended)
+       VALUES ($1, $2, $3, false)
+       RETURNING id, email, role, is_suspended, created_at`,
+      [normalizedEmail, passwordHash, sanitizedRole]
+    );
+
+    const newUser = insertResult.rows[0];
+
+    return res.status(201).json({
+      success: true,
+      message: `User account '${newUser.email}' provisioned successfully.`,
+      user: newUser,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Admin Toggle User Suspension
+ * PATCH /api/admin/users/:id/suspend
+ */
+export const toggleUserSuspension = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Self-suspension protection
+    if (req.user && req.user.id === id) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot suspend your own active administrator account.',
+      });
+    }
+
+    const check = await query('SELECT id, email, role, is_suspended FROM users WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User account not found.',
+      });
+    }
+
+    const result = await query(
+      'UPDATE users SET is_suspended = NOT is_suspended WHERE id = $1 RETURNING id, email, role, is_suspended',
+      [id]
+    );
+
+    const updatedUser = result.rows[0];
+    const actionText = updatedUser.is_suspended ? 'suspended' : 'reactivated';
+
+    return res.status(200).json({
+      success: true,
+      message: `User '${updatedUser.email}' has been ${actionText} successfully.`,
+      user: updatedUser,
     });
   } catch (error) {
     next(error);

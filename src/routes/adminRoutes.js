@@ -2,6 +2,8 @@ import { Router } from 'express';
 import {
   getMetrics,
   getUsers,
+  createUser,
+  toggleUserSuspension,
   deleteUser,
   getMessages,
   updateMessageStatus,
@@ -25,8 +27,10 @@ router.use(requireAdmin);
 // Platform metrics
 router.get('/metrics', getMetrics);
 
-// Registered users directory
+// Registered users directory & governance
 router.get('/users', getUsers);
+router.post('/users', createUser);
+router.patch('/users/:id/suspend', toggleUserSuspension);
 router.delete('/users/:id', deleteUser);
 
 // Contact messages inbox & status toggle

@@ -13,6 +13,9 @@ async function migrate() {
   try {
     console.log('Connecting to Neon PostgreSQL database...');
     await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS is_suspended BOOLEAN DEFAULT FALSE;
+
       ALTER TABLE domains 
       ADD COLUMN IF NOT EXISTS domain_cost NUMERIC(10,2) DEFAULT 0.00,
       ADD COLUMN IF NOT EXISTS has_hosting BOOLEAN DEFAULT FALSE,

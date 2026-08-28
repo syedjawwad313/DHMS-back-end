@@ -6,86 +6,14 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dhms_development_secret_key_jwt_20
 const JWT_EXPIRES_IN = '7d';
 
 /**
- * Register a new user
+ * Register a new user (Disabled for public — only Admin can create accounts)
  * POST /api/auth/register
  */
 export const register = async (req, res, next) => {
-  try {
-    const { email, password, role = 'user' } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email and password are required.',
-      });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide a valid email address.',
-      });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be at least 6 characters long.',
-      });
-    }
-
-    const sanitizedRole = role === 'admin' ? 'admin' : 'user';
-    const normalizedEmail = email.trim().toLowerCase();
-
-    // Check if user already exists
-    const existingUser = await query('SELECT id FROM users WHERE LOWER(email) = $1', [normalizedEmail]);
-    if (existingUser.rows.length > 0) {
-      return res.status(409).json({
-        success: false,
-        message: 'A user with this email already exists.',
-      });
-    }
-
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
-
-    // Insert user into database
-    const insertResult = await query(
-      `INSERT INTO users (email, password_hash, role)
-       VALUES ($1, $2, $3)
-       RETURNING id, email, role, created_at`,
-      [normalizedEmail, passwordHash, sanitizedRole]
-    );
-
-    const newUser = insertResult.rows[0];
-
-    // Generate JWT
-    const token = jwt.sign(
-      {
-        id: newUser.id,
-        email: newUser.email,
-        role: newUser.role,
-      },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
-
-    return res.status(201).json({
-      success: true,
-      message: 'User registered successfully.',
-      token,
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        role: newUser.role,
-        created_at: newUser.created_at,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
+  return res.status(403).json({
+    success: false,
+    message: 'Public registration is disabled. Accounts must be provisioned directly by a Platform Administrator.',
+  });
 };
 
 /**
@@ -107,7 +35,7 @@ export const login = async (req, res, next) => {
 
     // Look up user
     const userResult = await query(
-      'SELECT id, email, password_hash, role, created_at FROM users WHERE LOWER(email) = $1',
+      'SELECT id, email, password_hash, role, is_suspended, created_at FROM users WHERE LOWER(email) = $1',
       [normalizedEmail]
     );
 
@@ -119,6 +47,14 @@ export const login = async (req, res, next) => {
     }
 
     const user = userResult.rows[0];
+
+    // Check account suspension status
+    if (user.is_suspended) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been suspended by the administrator. Contact support.',
+      });
+    }
 
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password_hash);
@@ -148,6 +84,7 @@ export const login = async (req, res, next) => {
         id: user.id,
         email: user.email,
         role: user.role,
+        is_suspended: user.is_suspended,
         created_at: user.created_at,
       },
     });
