@@ -45,15 +45,32 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health Check
-app.get('/api/health', (req, res) => {
+// Root status endpoint for browser testing
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'online',
+    service: 'DHMS Backend REST API',
+    database: 'Neon PostgreSQL Connected',
+    healthCheck: '/api/health',
+    documentation: 'Domain & Hosting Management System API v1.0',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Favicon handler
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
+// Health Check (both /api/health and /health)
+const healthHandler = (req, res) => {
   res.status(200).json({
     status: 'OK',
     service: 'DHMS Backend REST API',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
-});
+};
+app.get('/api/health', healthHandler);
+app.get('/health', healthHandler);
 
 // Mount Routes
 app.use('/api/auth', authRoutes);
